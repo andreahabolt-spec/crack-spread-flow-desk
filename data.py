@@ -1,4 +1,5 @@
 # data.py
+# Version: final (Tab 1 + basis-only Tab 2)
 # All fixed inputs of the simulation. No calculations here.
 
 # Starting futures prices ($/bbl)
@@ -13,8 +14,6 @@ CRUDE_VOLUME = 10_000
 
 # Simulation settings
 DAYS = 21            # one month of trading days
-DT = 1 / 252         # one trading day, in years
-RISK_FREE = 0.02     # 2%, continuous compounding
 MU = 0.02            # drift used in the price paths
 
 # Annual volatilities (base case, before the sidebar multiplier)
@@ -33,8 +32,7 @@ OVERVIEW_TEXT = (
     "An external commodities desk structures a short 3:2:1 crack hedge using "
     "crude and product futures. The simulation follows the hedge over 21 "
     "trading days, showing how hedge P&L offsets changes in the refiner's "
-    "benchmark margin, and how basis and futures-curve movements affect the "
-    "remaining P&L."
+    "benchmark margin, and how changes in the basis affect the remaining P&L."
 )
 
 # ---------------------------------------------------------------
@@ -47,9 +45,3 @@ BASIS_SEED = 85      # fixed seed: the same basis path at every rerun
 # Basis = refiner's physical crack - futures benchmark crack ($/bbl)
 BASIS_0 = -0.50      # physical crack starts at $15.50 vs $16.00 benchmark
 BASIS_VOL = 0.10     # typical daily change of the basis ($/bbl)
-
-# Roll rule: the hedge starts in the nearby contract and is rolled
-# into the deferred contract at the end of ROLL_DAY, before expiry.
-NEARBY_EXPIRY = 12   # nearby contract expires on trading day 12
-ROLL_DAY = 10        # roll two days before expiry
-DAYS_PER_MONTH = 21  # deferred contract expires one month later

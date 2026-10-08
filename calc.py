@@ -1,4 +1,5 @@
 # calc.py
+# Version: final (Tab 1 + basis-only Tab 2)
 # All the maths of the project. No Streamlit code here.
 
 import numpy as np
@@ -67,44 +68,11 @@ def simulate_basis(basis0, daily_vol, days, seed):
     return np.round(basis, 2)
 
 
-def contract_crack(bench_crack, curve_spread, days_to_expiry, days_per_month):
-    """
-    Price of a crack futures contract with a constant curve shape.
-    It trades above the benchmark by curve_spread per month to expiry,
-    so deferred minus nearby = curve_spread at all times.
-    """
-    return bench_crack + curve_spread * days_to_expiry / days_per_month
-
-
-def rolled_short_crack_pnl(bench_crack, curve_spread, crude_volume,
-                           nearby_expiry, roll_day, days_per_month):
-    """
-    Cumulative P&L ($) of the short crack hedge, day by day, with the roll.
-    Days 0 to roll_day: the hedge holds the nearby contract.
-    End of roll_day: close nearby, open deferred, both at market prices,
-    so the roll itself creates no profit or loss.
-    After roll_day: the hedge holds the deferred contract.
-    """
-    deferred_expiry = nearby_expiry + days_per_month
-    pnl = [0.0]
-    for t in range(1, len(bench_crack)):
-        # contract held from the end of day t-1 to the end of day t
-        expiry = nearby_expiry if t - 1 < roll_day else deferred_expiry
-        price_before = contract_crack(bench_crack[t - 1], curve_spread,
-                                      expiry - (t - 1), days_per_month)
-        price_after = contract_crack(bench_crack[t], curve_spread,
-                                     expiry - t, days_per_month)
-        daily = -crude_volume * (price_after - price_before)   # short
-        pnl.append(pnl[-1] + daily)
-    return np.array(pnl)
-
-
-def run_hedge(path, basis, curve_spread, crude_volume,
-              nearby_expiry, roll_day, days_per_month):
+def run_hedge(path, basis, crude_volume):
     """
     All daily series of Tab 2, in $ (cumulative from day 0).
     Change in unhedged margin + hedge P&L = residual P&L
-    Residual P&L = basis contribution + roll impact
+    The residual comes from the change in basis.
     """
     crude, gas, dsl = path[:, 0], path[:, 1], path[:, 2]
 
@@ -114,19 +82,12 @@ def run_hedge(path, basis, curve_spread, crude_volume,
     # Refiner: long the physical crack
     unhedged = (physical_crack - physical_crack[0]) * crude_volume
 
-    # Hedge price effect, leg by leg (flat curve)
+    # Hedge: short the futures crack, leg by leg
     vol_crude, vol_gas, vol_dsl = hedge_volumes(crude_volume)
-    price_effect = (vol_crude * (crude - crude[0])
-                    + vol_gas * (gas - gas[0])
-                    + vol_dsl * (dsl - dsl[0]))
+    hedge = (vol_crude * (crude - crude[0])
+             + vol_gas * (gas - gas[0])
+             + vol_dsl * (dsl - dsl[0]))
 
-    # Roll impact: selected curve minus flat curve, same path, same roll rule
-    args = (crude_volume, nearby_expiry, roll_day, days_per_month)
-    with_curve = rolled_short_crack_pnl(bench_crack, curve_spread, *args)
-    flat_curve = rolled_short_crack_pnl(bench_crack, 0.0, *args)
-    roll_impact = with_curve - flat_curve
-
-    hedge = price_effect + roll_impact
     residual = unhedged + hedge
     basis_contrib = (basis - basis[0]) * crude_volume
 
@@ -134,5 +95,4 @@ def run_hedge(path, basis, curve_spread, crude_volume,
         "bench_crack": bench_crack, "physical_crack": physical_crack,
         "basis": basis, "unhedged": unhedged, "hedge": hedge,
         "residual": residual, "basis_contrib": basis_contrib,
-        "roll_impact": roll_impact,
     }

@@ -1,4 +1,5 @@
 # app.py
+# Version: final (Tab 1 + basis-only Tab 2)
 # The screen only. Inputs come from data.py, maths from calc.py.
 
 import altair as alt
@@ -10,17 +11,20 @@ import data
 
 
 def money(x):
-    """Format a dollar amount with its sign, e.g. +$30,000 or -$30,000."""
-    sign = "+" if x > 0 else "-" if x < 0 else ""
+    """Format a dollar amount with its sign, e.g. +$30,000 or −$30,000."""
+    sign = "+" if x > 0 else "−" if x < 0 else ""
     return f"{sign}${abs(x):,.0f}"
+
+
+def term(x):
+    """Second term of a sum, e.g. '+ $6,200' or '− $6,200'."""
+    return ("− " if x < 0 else "+ ") + f"${abs(x):,.0f}"
 
 
 def equation(a, b):
     """Write 'a + b = total' with clean signs, for on-screen checks."""
-    plain = lambda x: f"${abs(x):,.0f}"
-    first = ("-" if a < 0 else "") + plain(a)
-    second = ("- " if b < 0 else "+ ") + plain(b)
-    return f"{first} {second} = **{money(a + b)}**".replace("$", "\\$")
+    first = ("−" if a < 0 else "") + f"${abs(a):,.0f}"
+    return f"{first} {term(b)} = **{money(a + b)}**".replace("$", "\\$")
 
 
 st.set_page_config(page_title="Refiner crack-spread hedge", page_icon="🛢️")
@@ -44,7 +48,7 @@ with tab1:
     # 2. Starting market and benchmark crack
     st.subheader("Starting benchmark futures prices")
     st.write(
-        "Front-month futures: WTI crude, RBOB gasoline and NY Harbor ULSD "
+        "Benchmark futures: WTI crude, RBOB gasoline and NY Harbor ULSD "
         "diesel. Product futures are quoted in \\$/gal, so we convert them "
         "to \\$/bbl (1 bbl = 42 gal)."
     )
@@ -68,15 +72,10 @@ with tab1:
         f"= (2 × {data.GASOLINE_0:.2f} + 1 × {data.DIESEL_0:.2f}) / 3 "
         f"− {data.CRUDE_0:.2f} = **\\${crack_0:.2f}/bbl**"
     )
-    st.caption(
-        "These are futures prices, not the refiner's own physical prices. "
-        "Its real crude cost and product sales can differ by location and "
-        "quality. This gap is the basis risk shown in Tab 2."
-    )
-    st.info(
-        f"The \\${crack_0:.0f}/bbl crack is the **benchmark margin** the hedge "
-        "aims to protect. It is a starting reference, not the P&L of the "
-        "simulation."
+    st.write(
+        f"The \\${crack_0:.0f}/bbl is the starting benchmark crack, not P&L; "
+        "Tab 2 shows how benchmark price changes and physical basis changes "
+        "affect the hedge result."
     )
 
     # 3. Hedge setup
@@ -115,12 +114,8 @@ with tab1:
     })
     st.dataframe(terms, hide_index=True, width="stretch")
 
-    st.caption(
-        "Volumes are notional-equivalent barrels for the simulation. "
-        "They do not necessarily match a whole number of exchange-traded "
-        "contracts, and the 3:2:1 benchmark does not exactly match every "
-        "refinery's real yield."
-    )
+    st.caption("Illustrative barrel-equivalent volumes; actual contract "
+               "sizes and refinery yields may differ.")
 
     # 4. How the P&L works, with a worked example
     st.subheader("How the P&L works")
@@ -149,36 +144,21 @@ with tab1:
 
     st.write(
         "The residual is about \\$0 before basis differences and costs. "
-        "Tab 2 shows what makes it move away from zero."
+        "Tab 2 shows how a change in the basis moves it away from zero."
     )
 
     # 5. Limits of the hedge
     st.subheader("What the hedge does not guarantee")
     st.write(
-        "The hedge protects the **benchmark** margin, not the refiner's "
-        "actual net profit. Real crude costs, product yields, timing, "
-        "location and operating costs can all differ from the benchmark."
+        "The hedge protects the **benchmark** margin. The refinery's actual "
+        "results can differ because of physical basis, product yields, "
+        "timing and operating costs."
     )
-
-    # 6. Assumptions (closed by default to keep the tab short)
-    with st.expander("Key assumptions"):
-        st.markdown(
-            f"- Tab 2 uses one illustrative price path (correlated GBM, "
-            f"drift {data.MU:.0%}, correlation {data.CORR}), fixed so it is "
-            f"the same at every rerun.\n"
-            f"- Volatility: crude {data.SIGMA_CRUDE:.0%}, gasoline "
-            f"{data.SIGMA_GASOLINE:.0%}, diesel {data.SIGMA_DIESEL:.0%} "
-            f"per year.\n"
-            f"- Interest rate {data.RISK_FREE:.0%}, continuous compounding.\n"
-            "- No slippage and no fees.\n"
-            "- Initial and variation margin are excluded from this P&L "
-            "simulation (futures do require margin in practice)."
-        )
 
 # ---------------------------------------------------------------
 # TAB 2: Simulation
 # ---------------------------------------------------------------
-# Chart settings shared by both charts
+# x-axis shared by both charts
 X_AXIS = alt.X(
     "Day:Q",
     title="Trading day (0 = hedge inception, 21 = final trading day)",
@@ -190,8 +170,7 @@ GREY = "#999999"
 with tab2:
 
     st.subheader("Illustrative market path")
-    st.info("Illustrative example, not a forecast. The same path is used "
-            "at every rerun.")
+    st.info("Illustrative example, not a forecast.")
 
     # 1. One fixed market path and basis path
     path = calc.simulate_price_path(
@@ -200,35 +179,26 @@ with tab2:
         data.CORR, data.DAYS, data.PATH_SEED)
     basis = calc.simulate_basis(data.BASIS_0, data.BASIS_VOL, data.DAYS,
                                 data.BASIS_SEED)
-
-    # The curve slider sits in the roll section below; read its value here
-    curve_spread = st.session_state.get("curve_spread", 0.0)
-
-    res = calc.run_hedge(path, basis, curve_spread, data.CRUDE_VOLUME,
-                         data.NEARBY_EXPIRY, data.ROLL_DAY,
-                         data.DAYS_PER_MONTH)
+    res = calc.run_hedge(path, basis, data.CRUDE_VOLUME)
     days = list(range(data.DAYS + 1))
 
     # Day-21 figures, rounded to whole dollars so the sums match on screen
     unhedged_end = round(res["unhedged"][-1])
     hedge_end = round(res["hedge"][-1])
     residual_end = unhedged_end + hedge_end
-    basis_end = round(res["basis_contrib"][-1])
-    roll_end = round(res["roll_impact"][-1])
+    basis_0, basis_21 = res["basis"][0], res["basis"][-1]
 
     # 2. Chart 1: crack path
     st.markdown("**Crack path**")
+    crack_series = ["Futures benchmark crack", "Refiner's physical crack",
+                    "Starting benchmark ($16/bbl)"]
     crack_df = pd.DataFrame({
         "Day": days * 3,
-        "Series": (["Futures benchmark crack"] * len(days)
-                   + ["Refiner's physical crack"] * len(days)
-                   + ["Starting benchmark ($16/bbl)"] * len(days)),
+        "Series": [name for name in crack_series for _ in days],
         "Value": (list(res["bench_crack"]) + list(res["physical_crack"])
                   + [crack_0] * len(days)),
         "Basis": list(res["basis"]) * 3,
     })
-    crack_series = ["Futures benchmark crack", "Refiner's physical crack",
-                    "Starting benchmark ($16/bbl)"]
     crack_chart = alt.Chart(crack_df).mark_line(point=True, strokeWidth=3).encode(
         x=X_AXIS,
         y=alt.Y("Value:Q", title="3:2:1 crack ($/bbl)",
@@ -256,7 +226,7 @@ with tab2:
               f"{res['physical_crack'][-1]:.2f}",
               f"{res['physical_crack'][-1] - res['physical_crack'][0]:+.2f}")
     c3.metric("Basis, day 0 → day 21 ($/bbl)",
-              f"{res['basis'][0]:+.2f} → {res['basis'][-1]:+.2f}")
+              f"{basis_0:+.2f} → {basis_21:+.2f}")
 
     # 3. Chart 2: hedge outcome
     st.subheader("Hedge outcome")
@@ -264,10 +234,8 @@ with tab2:
     m1.metric("Change in unhedged margin", money(unhedged_end))
     m2.metric("Hedge P&L", money(hedge_end))
     m3.metric("Residual P&L", money(residual_end))
-    st.markdown(
-        "Residual P&L = unhedged margin change + hedge P&L: "
-        + equation(unhedged_end, hedge_end)
-    )
+    st.markdown("Residual P&L = unhedged margin change + hedge P&L: "
+                + equation(unhedged_end, hedge_end))
 
     pnl_series = ["Change in unhedged margin", "Hedge P&L", "Residual P&L"]
     pnl_df = pd.DataFrame({
@@ -290,56 +258,22 @@ with tab2:
     )
     zero_line = alt.Chart(pd.DataFrame({"Value": [0]})).mark_rule(
         color=GREY, strokeWidth=1.5).encode(y=alt.Y("Value:Q", title="P&L ($)"))
-    roll_df = pd.DataFrame({"Day": [data.ROLL_DAY],
-                            "Label": [f"Roll to deferred (end of day {data.ROLL_DAY})"]})
-    roll_line = alt.Chart(roll_df).mark_rule(
-        color=GREY, strokeDash=[2, 3]).encode(x="Day:Q")
-    roll_label = alt.Chart(roll_df).mark_text(
-        align="left", dx=4, color=GREY).encode(
-        x="Day:Q", y=alt.value(10), text="Label:N")
-    st.altair_chart((pnl_lines + zero_line + roll_line + roll_label)
-                    .properties(height=340))
+    st.altair_chart((pnl_lines + zero_line).properties(height=340))
 
-    # 4. What drives the residual: basis and roll
-    st.subheader("What drives the residual")
-    d1, d2 = st.columns(2)
-    d1.metric("Basis contribution", money(basis_end))
-    d2.metric("Roll impact", money(roll_end))
-    st.markdown(
-        "Residual P&L = basis contribution + roll impact: "
-        + equation(basis_end, roll_end)
+    # 4. P&L results at day 21, linked to the results above
+    st.subheader("P&L results at day 21")
+    results = (
+        "| | P&L |\n"
+        "|:---|---:|\n"
+        f"| Physical margin change | {money(unhedged_end)} |\n"
+        f"| Hedge P&L | {money(hedge_end)} |\n"
+        f"| **Residual P&L (basis)** | **{money(residual_end)}** |\n"
     )
-
-    st.markdown("**Basis risk**")
-    st.write(
-        f"The basis is the gap between the refiner's physical crack and the "
-        f"futures benchmark (location, quality, timing). The futures hedge "
-        f"cannot remove it. Only the change matters: "
-        f"({res['basis'][-1]:+.2f} − ({res['basis'][0]:+.2f})) × "
-        f"{data.CRUDE_VOLUME:,} bbl = {money(basis_end)}.".replace("$", "\\$")
-    )
-
-    st.markdown("**Roll risk**")
-    st.write(
-        f"Roll rule: the hedge starts in the nearby contract and is rolled "
-        f"into the deferred contract at the end of day {data.ROLL_DAY}, "
-        f"before expiry. Both trades are done at market prices, so the gap "
-        f"between the two contracts is not a profit or loss on the roll day. "
-        f"The roll impact builds up day by day: if the curve shape stays the "
-        f"same, the contract held moves toward the benchmark as it gets "
-        f"closer to expiry. For a short crack hedge, this tends to be "
-        f"positive in contango and negative in backwardation. It is not a "
-        f"guaranteed profit: the crack curve can shift, and outright price "
-        f"moves can outweigh it."
-    )
-    st.slider(
-        "Crack curve: deferred minus nearby ($/bbl)",
-        min_value=-1.0, max_value=1.0, value=0.0, step=0.25,
-        key="curve_spread",
-        help="Negative = backwardation, positive = contango.",
-    )
-    st.caption(
-        "Analytical comparison, not a forecast. The market path stays the "
-        "same; only the curve shape changes. Roll impact = hedge P&L with "
-        "this curve − hedge P&L with a flat curve, using the same roll rule."
+    st.markdown(results.replace("$", "\\$"))
+    st.info(
+        "**Can the refiner hedge basis risk?** Partly. Basis or differential "
+        "swaps can hedge part of this exposure when they match the "
+        "refinery's own crude and product markets. Differences in location, "
+        "quality or timing can still leave some residual basis risk, so the "
+        "residual P&L can be reduced but not always removed."
     )
