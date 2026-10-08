@@ -2,93 +2,88 @@
 
 **Live app:** https://crack-spread-flow-desk.streamlit.app
 
-A simulation of a flow trading desk handling a refiner's request to hedge its refining margin.
-The desk goes long a 3:2:1 crack spread for one month. The app shows how much the desk can make or lose, where the P&L comes from, which risks remain, and how the result changes when market conditions change.
+A simulation of an oil major's trading desk hedging its refinery's margin. The desk sells the 3:2:1 crack spread in the futures market for one month. The app shows what the hedge offsets, what it costs, and which risks remain. You can change the market view (tight or loose, a shock on one day, even negative prices) and see the result.
 
-*Educational project. All prices are simulated. This is not trading advice.*
+*Educational project. All prices are simulated. ExxonMobil is only an example of an oil major: the app uses no company data. This is not trading advice.*
 
-## The situation
+## The idea
 
-A refinery buys crude oil and sells gasoline and diesel. Its profit depends on the **crack spread**: the price of the products minus the price of crude. This project uses the standard **3:2:1** crack: 3 barrels of crude become 2 barrels of gasoline and 1 barrel of diesel.
+A refinery buys crude and sells gasoline and diesel. Its margin is the **crack spread**: (2 x gasoline + diesel) / 3 - crude, per barrel of crude (the 3:2:1 rule). With the simulated prices it is **$34 per barrel**.
 
-With the prices in the simulation, the crack is **$34 per barrel**: (2 x 105 + 126) / 3 - 78.
-
-## The client's problem
-
-The refiner will process 10,000 barrels next month. If the crack falls from $34 to $30, its margin falls by $4 x 10,000 = **$40,000**. It hedges by selling the crack.
-
-The desk takes the other side: it **buys the crack**. That means long gasoline and diesel futures, and short crude futures. If the crack falls by $4, the refiner's hedge gains $40,000 and the desk loses $40,000.
-
-## What the desk does
-
-For 21 trading days, the desk:
-
-1. **Opens the position:** short 10,000 barrels of crude, long 6,667 barrels of gasoline, long 3,333 barrels of diesel (10, 6.67 and 3.33 contracts of 1,000 barrels).
-2. **Marks it every day** and splits the P&L into price, roll and funding.
-3. **Rolls the futures** on day 10, when the near contract expires.
-4. **Measures the risks the position does not remove:** basis risk and curve risk.
-5. **Tests the result** under higher volatility and different correlations.
+The refinery processes 10,000 barrels a month. If the crack falls by $4, its margin falls by $40,000. The company's trading desk hedges this by **selling the crack in futures**: long crude, short gasoline and short diesel (10, 6.67 and 3.33 contracts of 1,000 barrels). If the crack falls by $4, the hedge gains $40,000. If it rises, the hedge loses and the refinery keeps the extra margin.
 
 ## What the app shows
 
+The app has two tabs.
+
 | Tab | What it shows |
 |---|---|
-| **Overview** | The situation, the client's problem, the desk's job, headline results |
-| **Market** | Simulated prices, the crack spread, the futures curves |
-| **Position & P&L** | The position, a daily trading log, the P&L split, the roll, all simulated months |
-| **Risk** | Basis exposure and hedge effectiveness, curve sensitivity and curve scenarios |
-| **Scenarios & Report** | Volatility and correlation scenarios, an edge case, a summary report |
+| **The hedge** | The story in five questions, one visual each: 1. What are we protecting? (the crack, all paths). 2. What does the hedge do? (one path: margin, hedge and net result). 3. What does it cost? (the futures curve). 4. What is left? (risk without and with the hedge). 5. What if the market changes? (scenario table, with your own market view). |
+| **Under the hood** | The details behind each number. A. The three cracks. B. The simulated market (all paths, then one selected path). C. The hedge, day by day. D. Risk: basis and curve. E. Scenarios and report. F. Assumptions and key terms. |
+
+## Three cracks
+
+| Crack | What it is | Real-world version | Day 0 |
+|---|---|---|---|
+| **Market crack** | The reference, from market prices | Spot WTI, or Dated Brent | 34.00 |
+| **Futures crack** | The hedge: from the futures contracts the desk holds | NYMEX or ICE futures | 33.38 |
+| **Refinery crack** | What the refinery really earns: market crack plus a local gap | Its own price: benchmark plus a differential | 34.00 |
+
+**Gap between the refinery and the futures = local gap + curve.** The local gap (refinery against market) is the **basis risk**: the hedge does not cover it. The curve (market against futures) decides **what the hedge costs**. The price moves of the refinery and the hedge cancel exactly, so: net result = local gap + roll and curve P&L + funding.
+
+## Market view (sidebar)
+
+| Control | What it does |
+|---|---|
+| **Market tightness**, -10 to +10 | Moves the carry of all three legs together. Positive: tighter market, more backwardation. Negative: looser market, more contango. |
+| **A shock during the month** | A day, a change in tightness, and a price jump in USD per barrel for crude and for the products. A jump can push a price below zero. |
+| **Storage is full** | Removes the cap on contango, as in April 2020, when oil tanks were full. |
+| **Advanced** | Extra carry or price jump for one leg (to flip a single leg), how much the curve moves each day, the link between prices and the curve, and whether prices drift with the curve. |
+
+A line under the title says which market view is applied. Contango is capped at interest + storage (crude 5%, products 4%), because traders would buy, store and sell forward.
 
 ## Headline results
 
-500 simulated months, default settings (seed 42):
+500 simulated months, base case (seed 42):
 
 | | Result |
 |---|---|
-| Roll P&L, average per month | about $13,000 |
-| Price P&L, typical swing | about +/- $39,000 |
-| Funding, per month | -$130 |
-| Months with a profit | 64% |
-| Worst month / best month | -$109,518 / +$140,243 |
-| Gain per unit of risk (average P&L / risk) | 0.39 |
+| Refinery margin risk without the hedge | +/- $38,805 a month |
+| Risk left after the hedge (basis, curve moves, funding) | +/- $8,950 a month |
+| Share of the risk removed | 95% |
+| Cost of the hedge | $12,876 a month |
+| Peak cash the company puts up | $103,912 on average, more than $151,588 in the worst 5% of months |
 
-The position earns a steady gain from the shape of the futures curve. The price risk around it is about three times larger, and it is not steady.
-
-## Risk
-
-- **Basis risk.** The refiner sells at a physical price, not at the futures price. A $1 move in the crack basis changes its margin by $10,000, and the futures hedge does not offset it. Over 500 simulated months, the futures hedge removes about **96%** of the refiner's risk. About +/- $8,000 a month is left.
-- **Curve risk.** The roll gain depends on the shape of the curve. If the products' backwardation flattens by 8 points of carry, the desk loses about $7,400 of its monthly gain. If it steepens by 8 points, the desk gains about $7,400 more.
+**Net result = basis effect + roll and curve P&L + funding.** The price moves of the refinery and the hedge cancel exactly.
 
 ## Scenarios
 
-500 simulated months in each scenario, with the same random numbers:
+| Scenario | Risk without hedge | Risk after hedge | Share removed | Cost of the hedge | Peak cash, worst 5% |
+|---|---|---|---|---|---|
+| Base case | $38,805 | $8,950 | 95% | $12,876 | $151,588 |
+| Volatility x2 | $77,124 | $8,953 | 99% | $12,877 | $224,100 |
+| Correlation 0.5 | $55,258 | $8,892 | 97% | $12,903 | $181,291 |
+| Correlation 0.9 | $26,058 | $8,956 | 88% | $12,861 | $124,684 |
+| Volatility x2 and correlation 0.5 | $110,528 | $8,896 | 99% | $12,904 | $281,236 |
 
-| Scenario | Risk (std of monthly P&L) | Months with a profit |
-|---|---|---|
-| Base case | $39,283 | 64% |
-| Volatility x2 | $79,859 | 58% |
-| Correlation 0.9 | $25,781 | 70% |
-| Correlation 0.5 | $56,201 | 59% |
-| Volatility x2 and correlation 0.5 | $113,988 | 54% |
-
-Risk grows with volatility and falls with correlation between the legs, because the desk is long products and short crude. The roll gain stays at about $13,000 in every scenario. An edge case with a thin crack (starting near $2.67) shows that the crack can go negative without breaking the position, since it is made of futures and has no floor.
+The risk without the hedge grows with volatility and falls with correlation, because the refinery is long the crack and the legs offset each other. The risk after the hedge barely changes, because I assume the basis is independent of prices. In a real crisis, the basis widens too.
 
 ## How it works
 
-- **Prices.** Crude, gasoline and diesel follow correlated random walks with a small drift (2% a year). Volatilities are 25%, 20% and 18%. Correlations are 0.80 (crude-gasoline), 0.85 (gasoline-diesel) and 0.75 (crude-diesel). The legs are linked with a Cholesky matrix. A fixed seed makes every result reproducible.
-- **Futures curves.** Cost of carry: futures price = underlying price x exp(carry x time to expiry). Carry = interest rate + storage - convenience yield. This gives +4% for crude (contango), -12% for gasoline and -10% for diesel (backwardation).
-- **Daily P&L.** A loop goes through the days one by one. Each day, P&L = price P&L + roll P&L + funding.
+- **Prices.** Crude, gasoline and diesel move by a random number of **dollars** each day, so a price can cross zero (volatility in dollars = yearly volatility x starting price; correlations 0.80, 0.85, 0.75, built with a Cholesky matrix). By default, each leg's expected drift equals its carry, so the curve gives no free lunch. A fixed seed makes every result reproducible.
+- **Futures curves.** Cost of carry: futures price = underlying price + carry x starting price x time to expiry. Carry = interest + storage - convenience yield: +4% for crude (contango), -12% for gasoline and -10% for diesel (backwardation). The carry moves every day: it is pulled back to its normal level, plus a random move linked to the price move.
+- **Hedge P&L.** A loop goes through the days one by one. Each day: hedge P&L = price P&L + roll and curve P&L + funding.
   - Price P&L = barrels x change in the underlying price.
-  - Roll P&L = P&L of the futures contract held, minus the price P&L.
-  - Funding = 2% a year on a margin of $78,000 (10% of the crude leg), which is $6.19 per day.
+  - Roll and curve P&L = barrels x (change in the futures price - change in the underlying price). It can be a gain or a cost.
+  - Funding = 2% a year on the margin ($78,000) plus the cash the hedge has paid out so far (variation margin).
+- **Refinery margin.** 10,000 barrels x change in the physical crack. Physical crack = underlying crack + basis crack.
 - **Basis.** For each leg, basis = 0.90 x yesterday's basis + a random shock. It is independent of the futures price.
-- **Checks built into the app.** The price effect equals the crack move x 10,000 barrels. Price + roll + funding equals the total P&L.
 
 ## Project structure
 
 ```
 app.py             The Streamlit page (display only)
-calc.py            The calculations: price paths, crack, futures price, roll yield, daily loop, basis, scenarios
+calc.py            The calculations: prices and curves, crack, futures price, daily loop, basis, scenarios
 data.py            All the assumptions: prices, volatilities, correlations, carry, funding, scenarios
 requirements.txt   Python packages
 ```
@@ -105,8 +100,15 @@ On Windows, if those commands are not recognized, use `py -m pip install -r requ
 ## Assumptions and limits
 
 - All prices are simulated. There is no market data.
-- The futures curves use assumed carry values, and the curve is fixed for the whole month. Real curves change every day.
+- The starting curve, the size of its daily moves and its link to prices are assumptions.
 - The basis sizes are assumptions, and the basis is independent of the price.
-- There is one roll, on day 10 of the month.
-- Funding assumes a 10% margin and a 2% rate. There are no trading costs and no slippage.
-- The 3:2:1 crack is a simplified refinery. A real refiner's margin does not move exactly like the futures crack. That gap is basis risk.
+- One roll, on day 10. No trading costs. One interest rate for borrowing and lending.
+- Negative prices come only from a shock you set (for example crude -$100). In April 2020, WTI settled below zero. The carry formula is linear in dollars, so it still works at negative prices.
+- A shock is the same in every simulated month. It shifts the averages, not the spread of the results.
+- The 3:2:1 crack is a simplified refinery.
+
+## Next steps (not built)
+
+- A snapshot of real market data as the starting prices and curve.
+- A curve that reacts to prices in more detail (today: one link, -0.5).
+- Options on the crack, to give the refinery a floor without giving up the upside.
